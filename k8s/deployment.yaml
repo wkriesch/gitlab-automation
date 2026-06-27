@@ -1,0 +1,130 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gitlab-automation-framework
+  namespace: gitlab-automation
+  labels:
+    app.kubernetes.io/name: gitlab-automation-framework
+    app.kubernetes.io/part-of: gitlab-automation
+spec:
+  replicas: 3 # Alta disponibilidade: 3 réplicas distribuídas
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1 # Cria no máximo 1 pod extra durante o update
+      maxUnavailable: 0 # Garante 0 indisponibilidade (só mata o antigo quando o novo estiver pronto/saudável)
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gitlab-automation-framework
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: gitlab-automation-framework
+    spec:
+      # Segurança: Executa como usuário não-root (automation criado no Dockerfile)
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+
+      containers:
+        - name: webhook-server
+          image: gitlab-automation-framework:stable # Substitua pela sua tag de registro de imagem (ex: gcr.io, registry)
+          imagePullPolicy: IfNotPresent
+
+          # Segurança do container: Drop de capacidades não essenciais e root filesystem somente leitura
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+
+          volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp
+
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+
+          # Definição estrita de recursos para governança e estabilidade do cluster
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+
+          # Injeção de variáveis de ambiente do ConfigMap e Secret
+          env:
+            - name: GITLAB_API_URL
+              valueFrom:
+                secretKeyRef:
+                  name: gitlab-automation-secret
+                  key: GITLAB_API_URL
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: gitlab-automation-config
+                  key: LOG_LEVEL
+            - name: RULES_FILE_PATH
+              valueFrom:
+                configMapKeyRef:
+                  name: gitlab-automation-config
+                  key: RULES_FILE_PATH
+            - name: GITLAB_ACCESS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: gitlab-automation-secret
+                  key: GITLAB_ACCESS_TOKEN
+            - name: GITLAB_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: gitlab-automation-secret
+                  key: GITLAB_WEBHOOK_SECRET
+            # A variável GITLAB_BOT_USERNAME pode ser injetada via configmap se necessário,
+            # do contrário o cliente auto-descobrirá no startup.
+
+          # Liveness Probe: Reinicia o container se a app travar
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          # Readiness Probe: Só direciona tráfego do Service após a app e bot inicializarem com sucesso
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+      volumes:
+        - name: tmp-volume
+          emptyDir: {}
+
+      # Resiliência Física: Anti-afinidade preferencial de Pod.
+      # Garante que o Kubernetes tente espalhar as réplicas em nós físicos distintos do cluster.
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values:
+                        - gitlab-automation-framework
+                topologyKey: "kubernetes.io/hostname"

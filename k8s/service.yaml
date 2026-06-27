@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: gitlab-automation-service
+  namespace: gitlab-automation
+  labels:
+    app.kubernetes.io/name: gitlab-automation-framework
+    app.kubernetes.io/part-of: gitlab-automation
+spec:
+  type: ClusterIP  # Acesso interno; exposto ao exterior via Ingress
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: gitlab-automation-framework

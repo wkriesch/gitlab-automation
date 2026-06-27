@@ -1,0 +1,28 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: gitlab-automation-hpa
+  namespace: gitlab-automation
+  labels:
+    app.kubernetes.io/name: gitlab-automation-framework
+    app.kubernetes.io/part-of: gitlab-automation
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: gitlab-automation-framework
+  minReplicas: 3  # Alta disponibilidade basal
+  maxReplicas: 10 # Escalabilidade sob demanda (ex: picos de webhooks de CI/CD ou updates em massa)
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70 # Escala horizontalmente ao bater 70% de consumo médio de CPU
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80 # Escala horizontalmente ao bater 80% de consumo médio de Memória

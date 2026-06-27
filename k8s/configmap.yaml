@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gitlab-automation-config
+  namespace: gitlab-automation
+  labels:
+    app.kubernetes.io/name: gitlab-automation-framework
+    app.kubernetes.io/part-of: gitlab-automation
+data:
+  LOG_LEVEL: "INFO"
+  RULES_FILE_PATH: "config/rules.yaml"

@@ -1,0 +1,69 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: eg
+  labels:
+    app.kubernetes.io/name: gitlab-automation-framework
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: gitlab-automation-gateway
+  namespace: gitlab-automation
+  labels:
+    app.kubernetes.io/name: gitlab-automation-framework
+    app.kubernetes.io/part-of: gitlab-automation
+  annotations:
+    # cert-manager integra nativamente com a Gateway API para emitir certificados automáticos
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  gatewayClassName: eg
+  listeners:
+    # Listener HTTP (Porta 80)
+    - name: http
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: Same
+          
+    # Listener HTTPS (Porta 443) com terminação TLS automatizada
+    - name: https
+      port: 443
+      protocol: HTTPS
+      hostname: "gitlab-webhook.exemplo.com.br" # Substitua pelo seu subdomínio DNS real
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - group: ""
+            kind: Secret
+            name: gitlab-automation-tls
+      allowedRoutes:
+        namespaces:
+          from: Same
+
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: gitlab-automation-route
+  namespace: gitlab-automation
+  labels:
+    app.kubernetes.io/name: gitlab-automation-framework
+    app.kubernetes.io/part-of: gitlab-automation
+spec:
+  parentRefs:
+    - name: gitlab-automation-gateway
+  hostnames:
+    - "gitlab-webhook.exemplo.com.br" # Substitua pelo seu subdomínio DNS real
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: gitlab-automation-service
+          port: 80

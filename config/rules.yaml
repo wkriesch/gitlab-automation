@@ -1,0 +1,47 @@
+rules:
+  - name: projeto_epic
+    match:
+      labels: ["tipo::projeto"]
+    actions:
+      - set_epic: 123
+
+  - name: kanban_todo
+    match:
+      labels: ["status::todo"]
+      on_change: true
+    actions:
+      - remove_label: "status::doing"
+      - remove_label: "status::blocked"
+      - remove_label: "status::done"
+      - add_comment: "Movimentado para status::todo"
+
+  - name: kanban_doing
+    match:
+      labels: ["status::doing"]
+      on_change: true
+    actions:
+      - set_start_date: now
+      - remove_label: "status::todo"
+      - remove_label: "status::blocked"
+      - remove_label: "status::done"
+      - add_comment: "Movimentado para status::doing"
+
+  - name: kanban_blocked
+    match:
+      labels: ["status::blocked"]
+      on_change: true
+    actions:
+      - remove_label: "status::doing"
+      - add_comment: "Movimentado para status::blocked"
+
+  - name: kanban_done
+    match:
+      labels: ["status::done"]
+      on_change: true
+    actions:
+      - set_due_date: now
+      - remove_label: "status::todo"
+      - remove_label: "status::doing"
+      - remove_label: "status::blocked"
+      - add_comment: "Movimentado para status::done"
+
